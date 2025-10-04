@@ -7,13 +7,15 @@ import (
 	"time"
 
 	"github.com/joho/godotenv"
+	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 func ConnectToDB() (*mongo.Database, error) {
 	if err := godotenv.Load(); err != nil {
-		return nil, err
+		// Don't return error—just log and continue
+		logrus.Info("No .env file found (using environment variables)")
 	}
 
 	var MONGO_URI = os.Getenv("MONGO_URI")

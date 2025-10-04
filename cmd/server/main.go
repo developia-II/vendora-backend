@@ -2,6 +2,7 @@ package main
 
 import (
 	"os"
+	"strings"
 
 	"github.com/developia-II/ecommerce-backend/internal/database"
 	"github.com/developia-II/ecommerce-backend/internal/handlers"
@@ -31,9 +32,17 @@ func main() {
 
 	logrus.Info("Loading environment variables...")
 	if err := godotenv.Load(); err != nil {
-		logrus.WithError(err).Error("failed to load env")
+		logrus.Info("No .env file found (using environment variables)")
 	}
 	PORT := os.Getenv("PORT")
+	if PORT == "" {
+		PORT = "8080"
+	}
+
+	if !strings.HasPrefix(PORT, ":") {
+		PORT = ":" + PORT
+	}
+
 	logrus.Info("Starting server on port: " + PORT)
 	router.Run(PORT)
 }
