@@ -6,6 +6,7 @@ import (
 
 	"github.com/developia-II/ecommerce-backend/internal/database"
 	"github.com/developia-II/ecommerce-backend/internal/handlers"
+	"github.com/gin-contrib/cors"
 	"github.com/gin-gonic/gin"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -28,6 +29,12 @@ func main() {
 	logrus.Info("Setting up Gin router...")
 	router := gin.Default()
 	logrus.Info("Calling handlers.SetupRoutes...")
+	router.Use(cors.New(cors.Config{
+		AllowOrigins:     []string{"http://localhost:3000", "https://your-frontend-url.vercel.app"},
+		AllowMethods:     []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
+		AllowHeaders:     []string{"Origin", "Content-Type", "Authorization"},
+		AllowCredentials: true,
+	}))
 	handlers.SetupRoutes(router, db)
 
 	logrus.Info("Loading environment variables...")
