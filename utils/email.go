@@ -1,36 +1,75 @@
 package utils
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"net/http"
 	"os"
-
-	"gopkg.in/gomail.v2"
 )
 
+type BrevoEmailRequest struct {
+	Sender      BrevoSender    `json:"sender"`
+	To          []BrevoContact `json:"to"`
+	Subject     string         `json:"subject"`
+	HtmlContent string         `json:"htmlContent"`
+}
+
+type BrevoSender struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+}
+
+type BrevoContact struct {
+	Email string `json:"email"`
+	Name  string `json:"name,omitempty"`
+}
+
 func SendEmail(to, subject, body string) error {
-	smtpHost := os.Getenv("SMTP_HOST")
-	smtpPort := 587
-	smtpUser := os.Getenv("SMTP_USER") // Keep as 886548001@smtp-brevo.com
-	smtpPassword := os.Getenv("SMTP_PASSWORD")
+	apiKey := os.Getenv("BREVO_API_KEY")
+	senderEmail := os.Getenv("SENDER_EMAIL")
+	senderName := os.Getenv("SENDER_NAME")
 
-	// Use your verified email as sender
-	senderEmail := "opiafavourjr@gmail.com"
-	senderName := "Vendora"
-
-	if smtpHost == "" || smtpUser == "" || smtpPassword == "" {
-		return fmt.Errorf("SMTP configuration missing")
+	if apiKey == "" || senderEmail == "" {
+		return fmt.Errorf("BREVO_API_KEY or SENDER_EMAIL not set")
 	}
 
-	m := gomail.NewMessage()
-	m.SetAddressHeader("From", senderEmail, senderName) // "Vendora <yourname@gmail.com>"
-	m.SetHeader("To", to)
-	m.SetHeader("Subject", subject)
-	m.SetBody("text/html", body)
+	// Prepare request payload
+	payload := BrevoEmailRequest{
+		Sender: BrevoSender{
+			Name:  senderName,
+			Email: senderEmail,
+		},
+		To: []BrevoContact{
+			{Email: to},
+		},
+		Subject:     subject,
+		HtmlContent: body,
+	}
 
-	d := gomail.NewDialer(smtpHost, smtpPort, smtpUser, smtpPassword)
+	jsonData, err := json.Marshal(payload)
+	if err != nil {
+		return fmt.Errorf("failed to marshal email payload: %w", err)
+	}
 
-	if err := d.DialAndSend(m); err != nil {
+	// Send HTTP request to Brevo API
+	req, err := http.NewRequest("POST", "https://api.brevo.com/v3/smtp/email", bytes.NewBuffer(jsonData))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("api-key", apiKey)
+
+	client := &http.Client{}
+	resp, err := client.Do(req)
+	if err != nil {
 		return fmt.Errorf("failed to send email: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("brevo API returned status %d", resp.StatusCode)
 	}
 
 	return nil
