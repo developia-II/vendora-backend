@@ -114,7 +114,7 @@ func (h *AuthHandler) CreateUser(c *gin.Context) {
 }
 
 func (h *AuthHandler) VerifyEmail(c *gin.Context) {
-	token := c.Query("token")
+	token := c.Param("token")
 
 	userID, err := primitive.ObjectIDFromHex(token)
 	if err != nil {
@@ -135,6 +135,58 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 
 	c.JSON(http.StatusOK, utils.SuccessResponse("Email verified successfully", nil))
 }
+
+func (h *AuthHandler) ResendVerification(c *gin.Context) {
+	token := c.Param("token")
+
+	userID, err := primitive.ObjectIDFromHex(token)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid token"))
+		return
+	}
+
+	collection := h.DB.Collection("users")
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	var user models.User
+	err = collection.FindOne(ctx, bson.M{"_id": userID}).Decode(&user)
+	if err != nil {
+		c.JSON(http.StatusNotFound, utils.ErrorResponse("User not found"))
+		return
+	}
+
+	// Check if user is already verified
+	if user.IsVerified {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("User is already verified"))
+		return
+	}
+
+	// Generate new verification link (using the same user ID as token)
+	verificationLink := fmt.Sprintf("http://localhost:3000/verify?token=%s", user.ID.Hex())
+	emailBody := fmt.Sprintf(`
+    <html>
+    <body style="font-family: Arial, sans-serif;">
+        <h2>Welcome to Vendora, %s!</h2>
+        <p>Here is your verification link again. Please verify your email by clicking the button below:</p>
+        <a href="%s" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Verify Email</a>
+        <p>If you didn't create this account, please ignore this email.</p>
+        <p>Best regards,<br>The Vendora Team</p>
+    </body>
+    </html>
+`, user.Name, verificationLink)
+
+	go func() {
+		if err := utils.SendEmail(user.Email, "Verify Your Vendora Account", emailBody); err != nil {
+			logrus.WithError(err).WithField("email", user.Email).Error("Failed to send verification email")
+		} else {
+			logrus.WithField("email", user.Email).Info("Verification email sent successfully")
+		}
+	}()
+
+	c.JSON(http.StatusOK, utils.SuccessResponse("Verification email sent successfully", nil))
+}
+
 func (h *AuthHandler) LoginUser(c *gin.Context) {
 	var cred struct {
 		Email    string `json:"email" validate:"required,email"`

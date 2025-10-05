@@ -30,7 +30,7 @@ func SetupRoutes(router *gin.Engine, db *mongo.Database) {
 	if db != nil {
 		logrus.Info("Database connected - setting up database routes")
 		router.POST("/api/v1/auth/register", NewAuthHandler(db).CreateUser)
-		router.POST("/api/v1/auth/verify", NewAuthHandler(db).VerifyEmail)
+		router.POST("/api/v1/auth/verify/:token", NewAuthHandler(db).VerifyEmail)
 		router.POST("/api/v1/auth/login", NewAuthHandler(db).LoginUser)
 		router.POST("/api/v1/auth/forgot-password", NewAuthHandler(db).ForgotPassword)
 		router.POST("/api/v1/auth/reset-password", NewAuthHandler(db).ResetPassword)
