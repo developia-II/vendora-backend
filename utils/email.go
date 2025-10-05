@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 
@@ -75,6 +76,10 @@ func SendEmail(to, subject, body string) error {
 
 	if resp.StatusCode != http.StatusCreated {
 		return fmt.Errorf("brevo API returned status %d", resp.StatusCode)
+	}
+	bodyBytes, _ := io.ReadAll(resp.Body)
+	if resp.StatusCode != http.StatusCreated {
+		return fmt.Errorf("brevo API returned status %d: %s", resp.StatusCode, string(bodyBytes))
 	}
 
 	return nil
