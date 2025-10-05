@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+
+	"github.com/sirupsen/logrus"
 )
 
 type BrevoEmailRequest struct {
@@ -29,6 +31,9 @@ func SendEmail(to, subject, body string) error {
 	apiKey := os.Getenv("BREVO_API_KEY")
 	senderEmail := os.Getenv("SENDER_EMAIL")
 	senderName := os.Getenv("SENDER_NAME")
+
+	logrus.WithField("apiKey", apiKey[:10]+"...").Info("Using API key")
+	logrus.WithField("senderEmail", senderEmail).Info("Using sender email")
 
 	if apiKey == "" || senderEmail == "" {
 		return fmt.Errorf("BREVO_API_KEY or SENDER_EMAIL not set")
