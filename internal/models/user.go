@@ -45,8 +45,8 @@ type UserPreferences struct {
 }
 
 type UserInterests struct {
-	Categories []string `json:"categories" bson:"categories,max=3"`
-	IsSet      bool     `json:"IsSet" bson:"IsSet"`
+	Categories []string `json:"categories" bson:"categories" validate:"required,min=1,max=3,dive,required"`
+	IsSet      bool     `json:"isSet" bson:"isSet"`
 }
 
 type UserProfile struct {

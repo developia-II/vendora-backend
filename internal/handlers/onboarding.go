@@ -68,15 +68,24 @@ func (h *OnboardingHandler) ClientUpdateInterest(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Validation failed: "+err.Error()))
 		return
 	}
+
+	// Initialize interests object if it's null, then set the fields
 	update := bson.M{
 		"$set": bson.M{
-			"interests.categories": userInterest.Categories,
-			"interests.IsSet":      true,
-			"updatedAt":            time.Now(),
+			"interests": bson.M{
+				"categories": userInterest.Categories,
+				"isSet":      true,
+			},
+			"updatedAt": time.Now(),
 		},
 	}
-	if _, err := collection.UpdateOne(ctx, filter, update); err != nil {
-		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to update user interest"))
+	result, err := collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to update user interest: "+err.Error()))
+		return
+	}
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, utils.ErrorResponse("User not found"))
 		return
 	}
 
@@ -128,15 +137,25 @@ func (h *OnboardingHandler) ClientUpdatePreference(c *gin.Context) {
 		return
 	}
 	filter := bson.M{"_id": objectId}
+
+	// Initialize preferences object if it's null, then set the fields
 	update := bson.M{
 		"$set": bson.M{
-			"preferences.budgetRange":       userPref.BudgetRange,
-			"preferences.shoppingFrequency": userPref.ShoppingFrequency,
-			"preferences.specialPrefs":      userPref.SpecialPrefs,
+			"preferences": bson.M{
+				"budgetRange":       userPref.BudgetRange,
+				"shoppingFrequency": userPref.ShoppingFrequency,
+				"specialPrefs":      userPref.SpecialPrefs,
+			},
+			"updatedAt": time.Now(),
 		},
 	}
-	if _, err := collection.UpdateOne(ctx, filter, update); err != nil {
-		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to update user"))
+	result, err := collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to update user: "+err.Error()))
+		return
+	}
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, utils.ErrorResponse("User not found"))
 		return
 	}
 
@@ -215,18 +234,27 @@ func (h *OnboardingHandler) CompleteOnboardingFlow(c *gin.Context) {
 
 	collection := h.DB.Collection("users")
 	filter := bson.M{"_id": objectId}
+
+	// Initialize profile object if it's null, then set the fields
 	update := bson.M{
 		"$set": bson.M{
-			"profile.location":     location,
-			"profile.bio":          bio,
-			"profile.profileImage": uploadResult.SecureURL,
-			"onboardingCompleted":  true,
-			"updatedAt":            time.Now(),
+			"profile": bson.M{
+				"location":     location,
+				"bio":          bio,
+				"profileImage": uploadResult.SecureURL,
+			},
+			"onboardingCompleted": true,
+			"updatedAt":           time.Now(),
 		},
 	}
 
-	if _, err := collection.UpdateOne(ctx, filter, update); err != nil {
-		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to update profile"))
+	result, err := collection.UpdateOne(ctx, filter, update)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to update profile: "+err.Error()))
+		return
+	}
+	if result.MatchedCount == 0 {
+		c.JSON(http.StatusNotFound, utils.ErrorResponse("User not found"))
 		return
 	}
 
