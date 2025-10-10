@@ -127,13 +127,23 @@ func (h *AuthHandler) VerifyEmail(c *gin.Context) {
 	defer cancel()
 
 	update := bson.M{"$set": bson.M{"isVerified": true}}
-	result, err := collection.UpdateOne(ctx, bson.M{"_id": userID}, update)
-	if err != nil || result.MatchedCount == 0 {
+	var updatedUser models.User
+	if err := collection.FindOneAndUpdate(ctx, bson.M{"_id": userID}, update).Decode(&updatedUser); err != nil {
 		c.JSON(http.StatusNotFound, utils.ErrorResponse("User not found"))
 		return
 	}
 
-	c.JSON(http.StatusOK, utils.SuccessResponse("Email verified successfully", nil))
+	c.JSON(http.StatusOK, utils.SuccessResponse("Email verified successfully", gin.H{
+		"success": true,
+		"data": gin.H{
+			"id":                  updatedUser.ID.Hex(),
+			"role":                updatedUser.Role,
+			"name":                updatedUser.Name,
+			"email":               updatedUser.Email,
+			"isVerified":          updatedUser.IsVerified,
+			"onboardingCompleted": updatedUser.OnboardingCompleted,
+		},
+	}))
 }
 
 func (h *AuthHandler) ResendVerification(c *gin.Context) {
