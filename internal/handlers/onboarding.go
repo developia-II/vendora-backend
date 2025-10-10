@@ -16,6 +16,7 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
 type OnboardingHandler struct {
@@ -236,6 +237,140 @@ func (h *OnboardingHandler) CompleteOnboardingFlow(c *gin.Context) {
 			"location":     location,
 			"bio":          bio,
 			"profileImage": uploadResult.SecureURL,
+		},
+	}))
+}
+
+func (h *OnboardingHandler) UserOnboardingDraft(c *gin.Context) {
+	authHeader := c.Request.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+
+	claims, err := utils.VerifyToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Failed to verify token"))
+		return
+	}
+	userId := claims.UserID
+
+	objectId, err := primitive.ObjectIDFromHex(userId)
+	if err != nil {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+	var input models.UserOnboardingDraft
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid request body"))
+		return
+	}
+	if err := validate.Struct(&input); err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Validation failed: "+err.Error()))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	collection := h.DB.Collection("drafts")
+
+	filter := bson.M{"userID": objectId, "role": input.Role}
+	update := bson.M{
+		"$set": bson.M{
+			"step":          input.Step,
+			"stepCompleted": input.StepCompleted,
+			"stepData":      input.StepData,
+			"role":          input.Role,
+			"updatedAt":     time.Now(),
+		},
+		"$setOnInsert": bson.M{
+			"userID": objectId,
+		},
+		"$inc": bson.M{"version": 1},
+	}
+
+	opts := options.FindOneAndUpdate().
+		SetUpsert(true).
+		SetReturnDocument(options.After)
+
+	_, _ = h.DB.Collection("drafts").Indexes().CreateOne(ctx, mongo.IndexModel{
+		Keys:    bson.D{{Key: "userID", Value: 1}, {Key: "role", Value: 1}},
+		Options: options.Index().SetUnique(true),
+	})
+
+	var saved models.UserOnboardingDraft
+	if err := collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&saved); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to save draft"))
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.SuccessResponse("Draft saved successfully", gin.H{
+		"success": true,
+		"data": gin.H{
+			"id":            saved.ID,
+			"userID":        saved.UserID,
+			"role":          saved.Role,
+			"step":          saved.Step,
+			"stepCompleted": saved.StepCompleted,
+			"stepData":      saved.StepData,
+			"version":       saved.Version,
+			"updatedAt":     saved.UpdatedAt,
+		},
+	}))
+}
+
+func (h *OnboardingHandler) GetOnboardingDraft(c *gin.Context) {
+	authHeader := c.Request.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+	claims, err := utils.VerifyToken(strings.TrimPrefix(authHeader, "Bearer "))
+	if err != nil {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or expired token"))
+		return
+	}
+	role := c.Query("role")
+	if role == "" {
+		role = "customer"
+	}
+
+	objectId, err := primitive.ObjectIDFromHex(claims.UserID)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid user ID"))
+		return
+	}
+
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 5*time.Second)
+	defer cancel()
+
+	var draft models.UserOnboardingDraft
+	err = h.DB.Collection("drafts").FindOne(ctx, bson.M{
+		"userID": objectId,
+		"role":   role,
+	}).Decode(&draft)
+	if err == mongo.ErrNoDocuments {
+		c.JSON(http.StatusOK, utils.SuccessResponse("No draft found", gin.H{"success": true, "data": nil}))
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to fetch draft"))
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.SuccessResponse("Draft fetched successfully", gin.H{
+		"success": true,
+		"data": gin.H{
+			"id":            draft.ID,
+			"userID":        draft.UserID,
+			"role":          draft.Role,
+			"step":          draft.Step,
+			"stepCompleted": draft.StepCompleted,
+			"stepData":      draft.StepData,
+			"version":       draft.Version,
+			"updatedAt":     draft.UpdatedAt,
 		},
 	}))
 }

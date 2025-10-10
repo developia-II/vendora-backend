@@ -32,6 +32,7 @@ type User struct {
 	Preferences         *UserPreferences `json:"preferences" bson:"preferences"`
 	Interests           *UserInterests   `json:"interests" bson:"interests"`
 	Profile             *UserProfile     `json:"profile" bson:"profile"`
+	VendorStatus        string           `json:"vendorStatus" bson:"vendorStatus"` // "", "pending", "approved", "rejected"
 
 	SellerApplication *SellerApplication `json:"sellerApplication" bson:"sellerApplication"`
 }
@@ -51,7 +52,7 @@ type UserInterests struct {
 type UserProfile struct {
 	Location       string `json:"location" bson:"location"`
 	Bio            string `json:"bio" bson:"bio"`
-	ProfilePicture string `json:"profileImage" bson:"profileImage"`
+	ProfilePicture string `json:"profileImage,omitempty" bson:"profileImage,omitempty"`
 }
 
 type SellerApplication struct {
@@ -66,4 +67,36 @@ type SellerApplication struct {
 	AppliedAt    time.Time           `json:"appliedAt" bson:"appliedAt"`
 	ReviewedAt   *time.Time          `json:"reviewedAt" bson:"reviewedAt"`
 	ReviewedBy   *primitive.ObjectID `json:"reviewedBy" bson:"reviewedBy"`
+}
+
+type VendorApplication struct {
+	ID                  primitive.ObjectID `bson:"_id,omitempty"`
+	UserID              primitive.ObjectID `bson:"userID"`
+	BusinessName        string             `json:"businessName" bson:"businessName"`
+	BusinessType        string             `json:"businessType" bson:"businessType"`
+	BusinessDescription string             `json:"businessDescription" bson:"businessDescription"`
+	ContactEmail        string             `json:"contactEmail" bson:"contactEmail"`
+	ContactPhone        string             `json:"contactPhone" bson:"contactPhone"`
+	BusinessAddress     string             `json:"businessAddress" bson:"businessAddress"`
+	TaxID               string             `json:"taxId" bson:"taxId"`
+	Website             string             `json:"website" bson:"website"`
+	SocialMedia         []string           `json:"socialMedia" bson:"socialMedia"`
+	Products            []string           `json:"products" bson:"products"`
+	Experience          string             `json:"experience" bson:"experience"`
+	Motivation          string             `json:"motivation" bson:"motivation"`
+	Status              string             `json:"status" bson:"status"` // pending, approved, rejected
+	AppliedAt           time.Time          `json:"appliedAt" bson:"appliedAt"`
+	ReviewedAt          *time.Time         `json:"reviewedAt" bson:"reviewedAt"`
+	ReviewedBy          string             `json:"reviewedBy" bson:"reviewedBy"`
+	ReviewNotes         string             `json:"reviewNotes" bson:"reviewNotes"`
+}
+type UserOnboardingDraft struct {
+	ID            primitive.ObjectID     `bson:"_id,omitempty"`
+	UserID        primitive.ObjectID     `json:"userID" bson:"userID"`
+	Role          string                 `json:"role" bson:"role"`
+	Step          int                    `json:"step" bson:"step"`
+	StepCompleted bool                   `json:"stepCompleted" bson:"stepCompleted"`
+	StepData      map[string]interface{} `json:"stepData" bson:"stepData"`
+	UpdatedAt     time.Time              `json:"updatedAt" bson:"updatedAt"`
+	Version       int                    `json:"version" bson:"version"`
 }
