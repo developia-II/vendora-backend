@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"context"
+	"fmt"
 	"net/http"
 	"os"
 	"strings"
@@ -294,7 +295,7 @@ func (h *OnboardingHandler) UserOnboardingDraft(c *gin.Context) {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid request body"))
 		return
 	}
-	if err := validate.Struct(&input); err != nil {
+	if err := onboardingValidator.Struct(&input); err != nil {
 		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Validation failed: "+err.Error()))
 		return
 	}
@@ -399,6 +400,266 @@ func (h *OnboardingHandler) GetOnboardingDraft(c *gin.Context) {
 			"stepData":      draft.StepData,
 			"version":       draft.Version,
 			"updatedAt":     draft.UpdatedAt,
+		},
+	}))
+}
+
+func (h *OnboardingHandler) SellerBusinessType(c *gin.Context) {
+	auth := c.GetHeader("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+	claims, err := utils.VerifyToken(strings.TrimPrefix(auth, "Bearer "))
+	if err != nil {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+
+	var input models.SellerBusinessInfo
+
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid json format"))
+		return
+	}
+	if err := onboardingValidator.Struct(input); err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid json payload: "+err.Error()))
+		return
+	}
+
+	userID, _ := primitive.ObjectIDFromHex(claims.UserID)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	// Save to drafts (role=vendor)
+	filter := bson.M{"userID": userID, "role": "vendor"}
+	update := bson.M{
+		"$set": bson.M{
+			"stepData.businessInfo": input,
+			"updatedAt":             time.Now(),
+		},
+		"$setOnInsert": bson.M{"userID": userID, "role": "vendor", "step": 1},
+		"$inc":         bson.M{"version": 1},
+	}
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+
+	var saved models.UserOnboardingDraft
+	if err := h.DB.Collection("drafts").FindOneAndUpdate(ctx, filter, update, opts).Decode(&saved); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to save: "+err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.SuccessResponse("Business details updated", gin.H{
+		"success": true,
+		"data":    gin.H{"businessInfo": input},
+	}))
+}
+
+func (h *OnboardingHandler) SellerBusinessCategory(c *gin.Context) {
+	auth := c.GetHeader("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+	claims, err := utils.VerifyToken(strings.TrimPrefix(auth, "Bearer "))
+	if err != nil {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+
+	type categoryInput struct {
+		Categories []string `json:"categories" validate:"required,min=1,max=5,dive,required"`
+	}
+	var input categoryInput
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid json format"))
+		return
+	}
+	if err := onboardingValidator.Struct(input); err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid json payload: "+err.Error()))
+		return
+	}
+
+	userID, _ := primitive.ObjectIDFromHex(claims.UserID)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	filter := bson.M{"userID": userID, "role": "vendor"}
+	update := bson.M{
+		"$set": bson.M{
+			"stepData.categories": input.Categories,
+			"updatedAt":           time.Now(),
+		},
+		"$setOnInsert": bson.M{"userID": userID, "role": "vendor", "step": 2},
+		"$inc":         bson.M{"version": 1},
+	}
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+
+	var saved models.UserOnboardingDraft
+	if err := h.DB.Collection("drafts").FindOneAndUpdate(ctx, filter, update, opts).Decode(&saved); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to save: "+err.Error()))
+		return
+	}
+
+	c.JSON(http.StatusOK, utils.SuccessResponse("Business categories updated", gin.H{
+		"success": true,
+		"data":    gin.H{"categories": input.Categories},
+	}))
+}
+
+func (h *OnboardingHandler) SellerBusinessInfo(c *gin.Context) {
+	auth := c.GetHeader("Authorization")
+	if !strings.HasPrefix(auth, "Bearer ") {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+	claims, err := utils.VerifyToken(strings.TrimPrefix(auth, "Bearer "))
+	if err != nil {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+	var input models.BusinessDetails
+	if err := c.ShouldBindJSON(&input); err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid json payload"))
+		fmt.Println("Error", err)
+		return
+	}
+	if err := onboardingValidator.Struct(&input); err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid json payload"))
+		fmt.Println("Error", err)
+		return
+	}
+	userID, _ := primitive.ObjectIDFromHex(claims.UserID)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	filter := bson.M{
+		"userID": userID,
+		"role":   "vendor",
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"stepData.businessDetails": bson.M{
+				"businessName": input.BusinessName,
+				"description":  input.Description,
+				"location":     input.Location,
+				"url":          input.Url,
+			},
+			"updatedAt": time.Now(),
+		},
+		"$setOnInsert": bson.M{"userID": userID, "role": "vendor", "step": 3},
+		"$inc":         bson.M{"version": 1},
+	}
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	var saved models.UserOnboardingDraft
+	if err := h.DB.Collection("drafts").FindOneAndUpdate(ctx, filter, update, opts).Decode(&saved); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to save: "+err.Error()))
+		return
+	}
+	c.JSON(http.StatusOK, utils.SuccessResponse("Business details updated", gin.H{
+		"success": true,
+		"data": gin.H{
+			"businessName": input.BusinessName,
+			"description":  input.Description,
+			"location":     input.Location,
+			"url":          input.Url,
+		},
+	}))
+}
+
+func (h *OnboardingHandler) StoreDetails(c *gin.Context) {
+	authHeader := c.Request.Header.Get("Authorization")
+	if !strings.HasPrefix(authHeader, "Bearer ") {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or missing token"))
+		return
+	}
+	tokenString := strings.TrimPrefix(authHeader, "Bearer ")
+	claims, err := utils.VerifyToken(tokenString)
+	if err != nil {
+		c.JSON(http.StatusForbidden, utils.ErrorResponse("Invalid or expired token"))
+		return
+	}
+	userID, _ := primitive.ObjectIDFromHex(claims.UserID)
+	ctx, cancel := context.WithTimeout(c.Request.Context(), 10*time.Second)
+	defer cancel()
+
+	storeName := c.PostForm("storeName")
+	storeDescription := c.PostForm("storeDescription")
+	primaryColor := c.PostForm("primaryColor")
+	accentColor := c.PostForm("accentColor")
+	file, err := c.FormFile("storeLogo")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Invalid file"))
+		return
+	}
+
+	allowedTypes := map[string]bool{
+		"image/jpeg": true,
+		"image/png":  true,
+	}
+	if !allowedTypes[file.Header.Get("Content-Type")] {
+		c.JSON(http.StatusBadRequest, utils.ErrorResponse("Only JPEG/PNG images are allowed"))
+		return
+	}
+	cld, err := cloudinary.NewFromParams(
+		os.Getenv("CLOUDINARY_CLOUD_NAME"),
+		os.Getenv("CLOUDINARY_API_KEY"),
+		os.Getenv("CLOUDINARY_API_SECRET"),
+	)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to initialize Cloudinary"))
+		return
+	}
+
+	src, err := file.Open()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to process image"))
+		return
+	}
+	defer src.Close()
+
+	uploadResult, err := cld.Upload.Upload(ctx, src, uploader.UploadParams{
+		Folder: "stores/logo",
+	})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to upload image"))
+		return
+	}
+
+	collection := h.DB.Collection("drafts")
+	filter := bson.M{
+		"userID": userID,
+		"role":   "vendor",
+	}
+	update := bson.M{
+		"$set": bson.M{
+			"stepData.storeDetails": bson.M{
+				"storeLogo":        uploadResult.SecureURL,
+				"storeName":        storeName,
+				"storeDescription": storeDescription,
+				"primaryColor":     primaryColor,
+				"accentColor":      accentColor,
+			},
+			"updatedAt": time.Now(),
+		},
+		"$setOnInsert": bson.M{"userID": userID, "role": "vendor", "step": 4},
+		"$inc":         bson.M{"version": 1},
+	}
+
+	opts := options.FindOneAndUpdate().SetUpsert(true).SetReturnDocument(options.After)
+	var saved models.UserOnboardingDraft
+	if err := collection.FindOneAndUpdate(ctx, filter, update, opts).Decode(&saved); err != nil {
+		c.JSON(http.StatusInternalServerError, utils.ErrorResponse("Failed to update store details"))
+		return
+	}
+	c.JSON(http.StatusOK, utils.SuccessResponse("Store details updated", gin.H{
+		"success": true,
+		"data": gin.H{
+			"storeLogo":        uploadResult.SecureURL,
+			"storeName":        storeName,
+			"storeDescription": storeDescription,
+			"primaryColor":     primaryColor,
+			"accentColor":      accentColor,
 		},
 	}))
 }

@@ -40,6 +40,10 @@ func SetupRoutes(router *gin.Engine, db *mongo.Database) {
 		router.POST("/api/v1/onboarding/draft", NewOnboardingHandler(db).UserOnboardingDraft)
 		router.GET("/api/v1/onboarding/draft", NewOnboardingHandler(db).GetOnboardingDraft)
 		router.POST("/api/v1/auth/resend/:token", NewAuthHandler(db).ResendVerification)
+		router.POST("/api/v1/onboarding/seller/business-type", NewOnboardingHandler(db).SellerBusinessType)
+		router.POST("/api/v1/onboarding/seller/business-category", NewOnboardingHandler(db).SellerBusinessCategory)
+		router.POST("/api/v1/onboarding/seller/business-details", NewOnboardingHandler(db).SellerBusinessInfo)
+		router.POST("/api/v1/onboarding/seller/store-details", NewOnboardingHandler(db).StoreDetails)
 
 	} else {
 		logrus.Warn("Database not connected - running with limited functionality")
